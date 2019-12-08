@@ -62,10 +62,30 @@ def clean_text(text):
 cleaned_questions=[]
 for question in questions:
     cleaned_questions.append(clean_text(question))  
+
 #cleaning answers
 cleaned_answers=[]
 for answer in answers:
     cleaned_answers.append(clean_text(answer)) 
 
+
+# %%
+#creating a dictionary that maps each word to its number of occurences
+
+word2count={}
+for question in cleaned_questions:
+    for word in question.split():
+        if word not in word2count:
+            word2count[word] = 1
+        else:
+           word2count[word] += 1 
+
+for answer in cleaned_answers:
+    for word in answer.split():
+        if word not in word2count:
+            word2count[word] = 1
+        else:
+           word2count[word] += 1 
+        
 
 # %%
