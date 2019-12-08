@@ -29,7 +29,7 @@ for conv in conversations[:-1]:
     conversations_ids.append(conv_.split(','))     
 
 # %%
-'''getting the questios and answers  separate'''
+'''getting the questions and answers  separate'''
 '''in each converation, the first element is the question second will be the answer'''
 questions=[]
 answers=[]
@@ -121,6 +121,51 @@ for token in tokens:
 # %%
 '''creating the inverse dictionary of the answerwords2int dictionary'''
 answersint2word = {w_i : w for  w,w_i in answerwords2int.items()}
+
+
+# %%
+'''Adding End of string token  to end of every ans'''
+for i in range(len(cleaned_answers)):
+    cleaned_answers[i]+=' <EOS>'
+
+# %%
+'''Translating all  the ques and ans into integer
+and replacing  all words  that were filtered oyt bu <OUT>'''
+questions_to_int = []
+for question in cleaned_questions:
+    ints = []
+    for word in question.split():
+        if word not in questionwords2int:
+            ints.append(questionwords2int['<OUT>'])
+        else:
+            ints.append(questionwords2int[word])
+    questions_to_int.append(ints)
+
+answers_to_int = []
+for answer in cleaned_answers:
+    ints = []
+    for word in answer.split():
+        if word not in answerwords2int:
+            ints.append(answerwords2int['<OUT>'])
+        else:
+            ints.append(answerwords2int[word])
+    answers_to_int.append(ints)  
+
+# %%
+answers_to_int[1:5]
+
+# %%
+# sorting quest and ans  by length
+sorted_clean_questions=[]
+sorted_clean_answers=[]
+for length in range(1,26):
+    for i in enumerate(questions_to_int):
+        if(len(i[1])==length):
+            sorted_clean_questions.append(questions_to_int[i[0]])
+            sorted_clean_answers.append(answers_to_int[i[0]])
+
+
+
 
 
 # %%
