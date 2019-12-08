@@ -29,3 +29,14 @@ for conv in conversations[:-1]:
     conversations_ids.append(conv_.split(','))     
 
 # %%
+'''getting the questios and answers  separate'''
+'''in each converation, the first element is the question second will be the answer'''
+questions=[]
+answers=[]
+for conv in conversations_ids:
+    for i in range(len(conv)-1):
+        questions.append(id2line[conv[i]])
+        answers.append(id2line[conv[i+1]])
+
+
+# %%
