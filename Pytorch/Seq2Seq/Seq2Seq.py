@@ -129,6 +129,7 @@ with open(datafile,'w',encoding='utf-8') as outputfile:
     writer= csv.writer(outputfile,delimiter=delimeter)
     for pairs in qa_pairs:
         writer.writerow(pairs)
+
 # print("Done writing")
 # with open(datafile,'rb') as file:
 #     lines = file.readlines()
@@ -163,6 +164,7 @@ class vocabulary:
             self.num_words+=1
         else:
             self.word2count[word] +=1
+
     #remove less frequent words below threshold
     def trim(self,min_count):
         keep_words = []
@@ -221,5 +223,46 @@ pairs = filterPairs(pairs)
 
 # %%
 len(pairs)
+
+# %%
+#looping through each pair and add  question and reply to the vocabulary
+for pair in pairs:
+    voc.addSentence(pair[0])
+    voc.addSentence(pair[1])
+print("Counted Words ",voc.num_words)
+for pair in pairs[:10]:
+    print(pair)
+
+
+# %%
+'''Trimming rare words'''
+MIN_COUNT = 3
+def trimRareWords(voc,pairs,MIN_COUNT):
+    
+    voc.trim(MIN_COUNT)
+    keep_pairs = []
+    for pair in pairs:
+        input_sentence = pair[0]
+        output_sentence = pair[1]
+        keep_input = True
+        keep_output = True
+
+        #check input sentence
+        for word in input_sentence.split(''):
+            if word not in voc.word2index:
+                keep_input = False
+                break
+
+        #check output sentence
+        for word in output_sentence.split(''):
+            if word not in voc.word2index:
+                keep_output = False
+                break
+        #keeping only the pairs  that do not have  trimmed words in their input and output sentences
+        if  keep_input and keep_output:
+            keep_pairs.append(pair)
+    print("Trimmed from {} pairs to {}, {:.4f} of total".format(len(pairs),len(keep_pairs),len(keep_pairs)/len(pairs)))
+    return keep_pairs
+
 
 # %%
