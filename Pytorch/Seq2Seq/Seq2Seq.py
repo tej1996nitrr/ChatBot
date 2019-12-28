@@ -171,7 +171,7 @@ class vocabulary:
         for k,v in self.word2count.items():
             if v>=min_count:
                 keep_words.append(k)
-        print('keep_words {} / {} = {:.4f}'.format(len(keep_words),len(self.word2index,len(keep_words)/len(self.word2index))))
+        print('keep_words {} / {} = {:.4f}'.format(len(keep_words),len(self.word2index),len(keep_words)/len(self.word2index)))
         self.word2count = {}
         self.index2word = {PAD_token:"PAD",SOS_token:"SOS",EOS_token:"EOS"}
         self.word2index = {}
@@ -201,6 +201,7 @@ def normalizeString(s):
 lines = open(datafile,encoding='utf-8').read().strip().split('\n')
 pairs = [[normalizeString(s) for s in pair.split('\t')] for pair in lines]
 print("Done Reading")
+#%%
 voc = vocabulary('Movie')
 
 # %%
@@ -216,7 +217,8 @@ def filterPairs(pairs):
 
 # %%
 # len(pairs)
-pairs
+# pairs
+pairs_backup = pairs
 # %%
 pairs = [pair for pair in pairs if len(pair)>1]
 pairs = filterPairs(pairs)
@@ -248,21 +250,140 @@ def trimRareWords(voc,pairs,MIN_COUNT):
         keep_output = True
 
         #check input sentence
-        for word in input_sentence.split(''):
+        for word in input_sentence.split(' '):
             if word not in voc.word2index:
                 keep_input = False
                 break
 
         #check output sentence
-        for word in output_sentence.split(''):
+        for word in output_sentence.split(' '):
             if word not in voc.word2index:
                 keep_output = False
                 break
         #keeping only the pairs  that do not have  trimmed words in their input and output sentences
         if  keep_input and keep_output:
             keep_pairs.append(pair)
-    print("Trimmed from {} pairs to {}, {:.4f} of total".format(len(pairs),len(keep_pairs),len(keep_pairs)/len(pairs)))
+    # print("Trimmed from {} pairs to {}, {:.4f} of total".format(len(pairs),len(keep_pairs),len(keep_pairs)/len(pairs)))
     return keep_pairs
+
+
+# %%
+pairs = trimRareWords(voc,pairs,MIN_COUNT)
+
+# %%
+# pair
+
+# %%
+'''Data Preparation'''
+'''Converting words to index'''
+def indexesFromSentences(voc,sentence):
+    return [voc.word2index[word] for word in sentence.split(' ')]+[EOS_token]
+
+
+# %%
+pairs[1][0]
+
+# %%
+# indexesFromSentences(voc,pairs[1][0])
+
+# %%
+inp = []
+out = []
+i = 0
+for pair in pairs[:10]:
+    inp.append(pair[0])
+    out.append(pair[1])
+print(inp)
+print(len(inp))
+indexes = [indexesFromSentences(voc,s) for s in inp]
+indexes
+
+# %%
+def zeropadding(l,fillvalue=0):
+    return list(itertools.zip_longest(*l,fillvalue=fillvalue))
+
+# %%
+leng = [len(ind) for ind in indexes]
+max(leng)
+#%%
+# import itertools
+# a=[[3, 4, 2],
+#  [7, 8, 9, 10, 4, 11, 12, 13, 2],
+#  [16, 4, 2],
+#  [8, 31, 22, 6, 2],
+#  [33, 34, 4, 4, 4, 2],
+#  [35, 36, 37, 38, 7, 39, 40, 41, 4, 2],
+#  [42, 2],
+#  [47, 7, 48, 40, 45, 49, 6, 2],
+#  [50, 51, 52, 6, 2],
+#  [58, 2]]
+
+# list(itertools.zip_longest(*a,fillvalue=0))
+
+# %%
+test_result = zeropadding(indexes)
+print(len(test_result))
+test_result
+#rows = max_length
+#columns = batch_size (for testing =10)
+# %%
+def binaryMatrix(l,value=0):
+    m = []
+    for i,seq in enumerate(l):
+        m.append([])
+        for token in seq:
+            if token == PAD_token:
+                m[i].append(0)
+            else:
+                m[i].append(1)
+    return m
+
+
+# %%
+binary_result = binaryMatrix(test_result)
+binary_result
+# %%
+
+#returns padded input sequence tensor 
+def inputvar(l,voc):
+    indexes_batch = [indexesFromSentences(voc,sentence) for sentence in l]
+    lengths = torch.tensor([len(indexes) for indexes in indexes_batch])
+    padList = zeropadding(indexes_batch)
+    padVar = torch.LongTensor(padList)
+    return padVar,lengths
+
+#returns padded target sequence tensor, padding mask, and mask target length
+def outputvar(l,voc):
+    indexes_batch = [indexesFromSentences(voc,sentence) for sentence in l]
+    max_target_len = max([len(indexes) for indexes in indexes_batch])
+    padList = zeropadding(indexes_batch)
+    mask = binaryMatrix(padList)
+    mask = torch.ByteTensor(mask)
+    padVar = torch.LongTensor(padList)
+    return padVar, mask, max_target_len
+
+#returns all items for given batch of pairs
+def batch2TrainData(voc, pair_batch):
+    pair_batch.sort(key = lambda x:len(x[0].split(" ")), reverse = True)
+    input_batch,output_batch=[],[]
+    for pair in pair_batch:
+        input_batch.append(pair[0])
+        output_batch.append(pair[1])
+    inp, length  = inputvar(input_batch,voc)
+    output, mask, max_target_len = outputvar(output_batch,voc)
+    return inp, length, output, mask, max_target_len
+
+import random
+small_batch_size = 5
+batches = batch2TrainData(voc,[random.choice(pairs) for _ in range(small_batch_size)])
+input_variable,lengths, target_variables, mask, mask_target_len = batches
+print("input_variables")
+print(input_variable)
+print("lengths",lengths)
+print("target_variables",target_variables)
+print("mask",mask)
+print("mask_target_len",mask_target_len)
+
 
 
 # %%
