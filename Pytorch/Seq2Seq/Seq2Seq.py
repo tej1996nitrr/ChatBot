@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 from torch import optim
-import torch.nn.functional as f
+import torch.nn.functional as F
 import csv
 import random
 import re
@@ -364,6 +364,7 @@ def outputvar(l,voc):
 
 #returns all items for given batch of pairs
 def batch2TrainData(voc, pair_batch):
+    #sort questions in descending order length
     pair_batch.sort(key = lambda x:len(x[0].split(" ")), reverse = True)
     input_batch,output_batch=[],[]
     for pair in pair_batch:
@@ -385,5 +386,80 @@ print("mask",mask)
 print("mask_target_len",mask_target_len)
 
 
+# %%
+'''Defining ENcoder'''
+class EncoderRNN(nn.Module):
+    def __init__(self, hidden_size, embedding, n_layers=1, droput=0):
+        super(EncoderRNN,self).__init__()
+        self.n_layers = n_layers
+        self.hidden_size = hidden_size
+        self.embedding = embedding
+        #initializing gru. input_size and hidden_size are set to hidden_size
+        #because our input size is a word embedding with number_of_features == hidden_size
+        #hidden_size = no. of neurons in hidden layer = no. of rnn cells
+        self.gru = nn.GRU(hidden_size,hidden_size,n_layers, dropout = (0 if n_layers==1 else droput),bidirectional=True) 
+
+    def forward(self,input_seq,input_lengths, hidden=None):
+        #input_seq = batch of input sequences; shape = (max_length,batch_size)
+        #inputs_length = list of sentence lengths corresponding to each sentence in the batch
+        #hidden_state,of shape:(n_layers x num_directions,batch_size,hidden_size)
+        #convert word indexes to embeddings
+        embedded = self.embedding(input_seq)
+        #pack padded batch of sequence for RNN module
+        packed = torch.nn.utils.rnn.pack_padded_sequence(embedded,input_lengths)
+        #forward pass through GRu
+        outputs, hidden = self.gru(packed,hidden)
+        #unpack padding
+        outputs, _= torch.nn.utils.rnn.pad_packed_sequence(outputs)
+        #sum bidirectional GRU outputs
+        outputs = outputs[:,:,:self.hidden_size]+outputs[:,:,self.hidden_size:]
+        return outputs,hidden
+        #outputs:the output features h_t from the last layer of the gru, for each timestep(sum of bidirectional outputs)
+        #outputs shape = (max_length, batch_size, hidden_size)]
+        #hidden: hidden state for the last timestep of shape( n_layers x num_directions, batch_size, hidden_size)
+
+
+#%%
+# a = torch.randn(6,7) #6 batches of max 7 words
+# lengths = [7,7,6,5,4,2] #length of each batch
+# targets = torch.nn.utils.rnn.pack_padded_sequence(a,lengths,batch_first=True)
+# print(targets[0].shape)
+# print(a)
+# print(targets[0])
+# print(targets[1])
+
+'''
+a = torch.randn(6,7) #6 batches of max 7 words...
+torch.Size([31])
+tensor([[ 0.0894,  0.0223,  0.7523,  0.8689,  0.8928,  0.7619,  1.1048],
+        [-1.0012,  1.8771, -1.4949, -0.6938, -0.8964, -1.1081,  0.5691],
+        [-0.7850, -0.2666, -1.0998,  1.2676,  2.3676, -0.6189,  0.3998],
+        [-0.4090, -1.7571, -0.5955,  0.8331,  1.4483, -0.3819, -1.1568],
+        [ 0.5162, -0.4082, -1.3798, -0.6103, -0.3605,  1.0129, -0.4235],
+        [ 0.9563, -0.0239,  1.1315,  1.8441, -1.7678,  0.5480, -1.2487]])
+tensor([ 0.0894, -1.0012, -0.7850, -0.4090,  0.5162,  0.9563,  0.0223,  1.8771,
+        -0.2666, -1.7571, -0.4082, -0.0239,  0.7523, -1.4949, -1.0998, -0.5955,
+        -1.3798,  0.8689, -0.6938,  1.2676,  0.8331, -0.6103,  0.8928, -0.8964,
+         2.3676,  1.4483,  0.7619, -1.1081, -0.6189,  1.1048,  0.5691])
+tensor([6, 6, 5, 5, 4, 3, 2])'''
+
 
 # %%
+class Attn(torch.nn.Module):
+    def __init__(self, method, hidden_state):
+        super(Attn,self).__init__()
+        self.method = method
+        self.hidden_size = hidden_size
+
+    def dot_score(self, hidden, encoder_output):
+        return torch.sum(hidden * encoder_output, dim=2) # second dim = hidden_size
+    
+    def forward(self,hidden, encoder_outputs):
+        #hidden of shape:(1, batch_size, hidden_size)
+        #encoder_outputs of shape: (max_length,batch_size,hidden_size)
+        # (1, batch_size, hidden_size) * (max_length,batch_size,hidden_size) = (max_length,batch_size,hidden_size)
+        attn_energies = self.dot_score(hidden,encoder_outputs)        #(max_length,batch_size)
+        attn_energies = attn_energies.t()                             #(batch_size,max_length)
+        return F.softmax(attn_energies,dim=1).unsqueeze(1)            #(batch_size,1,max_length)
+
+
