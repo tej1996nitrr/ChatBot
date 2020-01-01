@@ -237,6 +237,7 @@ for pair in pairs[:10]:
 
 
 # %%
+
 '''Trimming rare words'''
 MIN_COUNT = 3
 def trimRareWords(voc,pairs,MIN_COUNT):

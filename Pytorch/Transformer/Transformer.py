@@ -15,7 +15,7 @@ with open(conv_path, 'r') as c:
     conv = c.readlines()
 with open(lines_path, 'r') as l:
     lines = l.readlines()
-
+# 1, 2, 3, 4, 5, 18240, 18240, 6,
 # %%
 lines_dic = {}
 for line in lines:
@@ -96,29 +96,85 @@ pairs_encoded[1]
 with open('pairs_encoded.json', 'w') as p:
     json.dump(pairs_encoded, p)
 #%%
-class Dataset(Dataset):
+class Datasetclass(torch.utils.data.Dataset):
+
     def __init__(self):
 
         self.pairs = json.load(open('pairs_encoded.json'))
         self.dataset_size = len(self.pairs)
+
+    def __getitem__(self, i):
         
+        question = torch.LongTensor(self.pairs[i][0])
+        reply = torch.LongTensor(self.pairs[i][1])
+            
+        return question, reply
+
+    def __len__(self):
+        return self.dataset_size
+#%%
+# import torch
+# class Someclass(torch.utils.data.Dataset):
+#     def __init__(self):
+#         self.samples = list(range(1, 1001))
+
+#     def __len__(self):
+#         return len(self.samples)
+
+#     def __getitem__(self, idx):
+#         return self.samples[idx]
+
+
+# %%
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# %%
+device
+
+# %%
+train_loader = torch.utils.data.DataLoader(Datasetclass(),
+                                           batch_size = 100, 
+                                           shuffle=True, 
+                                           )
+
+# %%
+question,reply = next(iter(train_loader))
+#iter makes data loader iterable
+#next gives a next sample
+
+# %%
+print(question.shape)
+reply.shape
+#we have 2 extra tokens(start and end , so reply is of column lemgth 27)
+# %%
+'''Creating mask'''
+# size=5
+# torch.triu(torch.ones(size,size)).transpose(0,1)
+#0 is a dimension that will be transformed to dimension 1
+
+def create_masks(question, reply_input, reply_target):
+    
+    def subsequent_mask(size):
+        #we need to create an integer based mask
+        mask = torch.triu(torch.ones(size, size)).transpose(0, 1).type(dtype=torch.uint8)
+        return mask.unsqueeze(0)
+    question_mask = question!=0
+    question_mask = question_mask.to(device)
+    question_mask = question_mask.unsqueeze(1).unsqueeze(1)         # (batch_size, 1, 1, max_words)
+    reply_input_mask = reply_input!=0
+    reply_input_mask = reply_input_mask.unsqueeze(1)  # (batch_size, 1, max_words)
+    reply_input_mask = reply_input_mask & subsequent_mask(reply_input.size(-1)).type_as(reply_input_mask.data) 
+
+    reply_input_mask = reply_input_mask.unsqueeze(1) # (batch_size, 1, max_words, max_words)
+    reply_target_mask = reply_target!=0              # (batch_size, max_words)
+    
+    return question_mask, reply_input_mask, reply_target_mask
+
+
 
 # %%
 
 
 # %%
-
-
-# %%
-
-
-# %%
-
-
-# %%
-
-
-# %%
-
 
 # %%
