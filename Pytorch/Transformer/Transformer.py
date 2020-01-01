@@ -246,3 +246,53 @@ class MultiHeadAttention(nn.Module):
         return interacted
 
 # %%
+class FeedForward(nn.Module):
+
+    def __init__(self, d_model, middle_dim = 2048):
+        super(FeedForward, self).__init__()
+        
+        self.fc1 = nn.Linear(d_model, middle_dim)
+        self.fc2 = nn.Linear(middle_dim, d_model)
+        self.dropout = nn.Dropout(0.1)
+
+    def forward(self, x):
+        out = F.relu(self.fc1(x))
+        out = self.fc2(self.dropout(out))
+        return out
+
+# %%
+class EncoderLayer(nn.Module):
+
+    def __init__(self, d_model, heads):
+        super(EncoderLayer, self).__init__()
+        self.layernorm = nn.LayerNorm(d_model)
+        self.self_multihead = MultiHeadAttention(heads, d_model)
+        self.feed_forward = FeedForward(d_model)
+        self.dropout = nn.Dropout(0.1)
+
+    def forward(self, embeddings, mask):
+        interacted = self.dropout(self.self_multihead(embeddings, embeddings, embeddings, mask))
+        interacted = self.layernorm(interacted + embeddings) #interacted + embeddings=> residual connection
+        feed_forward_out = self.dropout(self.feed_forward(interacted))
+        encoded = self.layernorm(feed_forward_out + interacted)
+        return encoded
+
+# %%
+class DecoderLayer(nn.Module):
+    
+    def __init__(self, d_model, heads):
+        super(DecoderLayer, self).__init__()
+        self.layernorm = nn.LayerNorm(d_model)
+        self.self_multihead = MultiHeadAttention(heads, d_model)
+        self.src_multihead = MultiHeadAttention(heads, d_model)
+        self.feed_forward = FeedForward(d_model)
+        self.dropout = nn.Dropout(0.1)
+        
+    def forward(self, embeddings, encoded, src_mask, target_mask):
+        query = self.dropout(self.self_multihead(embeddings, embeddings, embeddings, target_mask))
+        query = self.layernorm(query + embeddings)
+        interacted = self.dropout(self.src_multihead(query, encoded, encoded, src_mask))
+        interacted = self.layernorm(interacted + query)
+        feed_forward_out = self.dropout(self.feed_forward(interacted))
+        decoded = self.layernorm(feed_forward_out + interacted)
+        return decoded
