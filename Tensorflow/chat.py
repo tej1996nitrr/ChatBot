@@ -165,9 +165,6 @@ for length in range(1,26):
             sorted_clean_answers.append(answers_to_int[i[0]])
 
 
-
-
-
 # %%
 def model_inputs():
     inputs = tf.placeholder(tf.int32,[None,None],name='input')

@@ -31,6 +31,7 @@ def remove_punc(string):
             no_punct = no_punct + char  # space is also a character
     return no_punct.lower()
 
+
 # %%
 #making conversations Q/A pairs dictionary
 pairs = []
@@ -41,10 +42,11 @@ for con in conv:
         
         if i==len(ids)-1:
             break
-        
+
         first = remove_punc(lines_dic[ids[i]].strip())      
         second = remove_punc(lines_dic[ids[i+1]].strip())
         qa_pairs.append(first.split()[:max_len])
+
         qa_pairs.append(second.split()[:max_len])
         pairs.append(qa_pairs)
 
@@ -296,3 +298,87 @@ class DecoderLayer(nn.Module):
         feed_forward_out = self.dropout(self.feed_forward(interacted))
         decoded = self.layernorm(feed_forward_out + interacted)
         return decoded
+#%%
+
+class Transformer(nn.Module):
+    
+    def __init__(self, d_model, heads, num_layers, word_map):
+        super(Transformer, self).__init__()
+        
+        self.d_model = d_model
+        self.vocab_size = len(word_map)
+        self.embed = Embeddings(self.vocab_size, d_model)
+        self.encoder = nn.ModuleList([EncoderLayer(d_model, heads) for _ in range(num_layers)])
+        self.decoder = nn.ModuleList([DecoderLayer(d_model, heads) for _ in range(num_layers)])
+        self.logit = nn.Linear(d_model, self.vocab_size)
+        
+    def encode(self, src_words, src_mask):
+        src_embeddings = self.embed(src_words)
+        for layer in self.encoder:
+            src_embeddings = layer(src_embeddings, src_mask)
+        return src_embeddings
+    
+    def decode(self, target_words, target_mask, src_embeddings, src_mask):
+        tgt_embeddings = self.embed(target_words)
+        for layer in self.decoder:
+            tgt_embeddings = layer(tgt_embeddings, src_embeddings, src_mask, target_mask)
+        return tgt_embeddings
+        
+    def forward(self, src_words, src_mask, target_words, target_mask):
+        encoded = self.encode(src_words, src_mask)
+        decoded = self.decode(target_words, target_mask, encoded, src_mask)
+        out = F.log_softmax(self.logit(decoded), dim = 2)
+        return out
+
+# %%
+class AdamWarmup:
+    
+    def __init__(self, model_size, warmup_steps, optimizer):
+        
+        self.model_size = model_size
+        self.warmup_steps = warmup_steps
+        self.optimizer = optimizer
+        self.current_step = 0
+        self.lr = 0
+        
+    def get_lr(self):
+        return self.model_size ** (-0.5) * min(self.current_step ** (-0.5), self.current_step * self.warmup_steps ** (-1.5))
+        
+    def step(self):
+        # Increment the number of steps each time we call the step function
+        self.current_step += 1
+        lr = self.get_lr()
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = lr
+        # update the learning rate
+        self.lr = lr
+        #update weights
+        self.optimizer.step()
+
+# %%
+class LossWithLS(nn.Module):
+
+    def __init__(self, size, smooth):
+        super(LossWithLS, self).__init__()
+        self.criterion = nn.KLDivLoss(size_average=False, reduce=False)
+        self.confidence = 1.0 - smooth
+        self.smooth = smooth
+        self.size = size
+        
+    def forward(self, prediction, target, mask):
+        """
+        prediction of shape: (batch_size, max_words, vocab_size)
+        target and mask of shape: (batch_size, max_words)
+        """
+        prediction = prediction.view(-1, prediction.size(-1))   # (batch_size * max_words, vocab_size)
+        target = target.contiguous().view(-1)   # (batch_size * max_words)
+        mask = mask.float()
+        mask = mask.view(-1)       # (batch_size * max_words)
+        labels = prediction.data.clone()
+        labels.fill_(self.smooth / (self.size - 1))
+        labels.scatter_(1, target.data.unsqueeze(1), self.confidence)
+        loss = self.criterion(prediction, labels)    # (batch_size * max_words, vocab_size)
+        loss = (loss.sum(1) * mask).sum() / mask.sum()
+        return loss
+
+# %%
